@@ -11,9 +11,7 @@ class SamlController < ApplicationController
       render :action => :no_settings
       return
     end
-
     request = OneLogin::RubySaml::Authrequest.new
-
     redirect_to(request.create(settings))
   end
 
@@ -22,12 +20,20 @@ class SamlController < ApplicationController
     response = OneLogin::RubySaml::Response.new(params[:SAMLResponse], settings: settings)
 
     if response.is_valid?
-      session[:nameid] = response.nameid
-      session[:attributes] = response.attributes
-      @attrs = session[:attributes]
-      logger.info "Sucessfully logged"
-      logger.info "NAMEID: #{response.nameid}"
-      render :action => :index
+      group = response.attributes.detect {|key,attr| key == "group" }
+      if !group.nil? && group.size == 2
+        if group[1].any? {|group| group == "sample-group"}
+          session[:nameid] = response.nameid
+          session[:attributes] = response.attributes
+          @attrs = session[:attributes]
+          logger.info "Sucessfully logged"
+          logger.info "NAMEID: #{response.nameid}"
+          return render :action => :index
+        end
+      end
+      logger.info "User Invalid."
+      @errors = ["NAMEID: '#{response.nameid}' is not member of 'sample-group' group"]
+      render :action => :fail
     else
       logger.info "Response Invalid. Errors: #{response.errors}"
       @errors = response.errors
